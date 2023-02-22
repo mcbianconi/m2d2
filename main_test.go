@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"testing"
@@ -31,7 +32,7 @@ func TestConvertIline(t *testing.T) {
 
 	assert.Nil(t, err, "arquivo de teste não criado")
 
-	assert.True(t, isValidImageTag(string(newContent)), "tag gerada não é válida")
+	assert.True(t, isValidImageTag(string(newContent)), fmt.Sprintf("tag gerada não é válida: %s", string(newContent)))
 }
 
 func mdFile(t *testing.T, mdContent string) *os.File {
