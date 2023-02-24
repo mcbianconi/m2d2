@@ -2,7 +2,7 @@ name: Go
 on: [push]
 
 jobs:
-  build:
+  Test:
     runs-on: ubuntu-latest
 
     steps:

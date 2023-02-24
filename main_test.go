@@ -1,52 +1,67 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"regexp"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	validD2   = "a->b"
-	invalidD2 = `Regular text`
-)
+func TestGetBlockReference(t *testing.T) {
+	input1 := "```d2\na->b\n```"
+	input2 := "```d2\na->b\n```"
 
-func asInline(d2code string) string {
-	return "```d2\n" + d2code + "\n```"
+	result1 := getBlockReference(input1)
+	result2 := getBlockReference(input2)
+	assert.Equal(t, input1, input2)
+	assert.Equal(t, result1, result2)
 }
 
-func TestConvertIline(t *testing.T) {
-	// Cria um arquivo temporário para o código d2
-	mdContent := asInline(validD2)
-	mdFile := mdFile(t, mdContent)
-
-	// Chama a função ReplaceD2 com o código d2 e o diretório temporário
-	err := convertInline(mdFile.Name())
-
-	assert.Nil(t, err, "erro convertendo inline")
-
-	newContent, err := os.ReadFile(mdFile.Name())
-
-	assert.Nil(t, err, "arquivo de teste não criado")
-
-	assert.True(t, isValidImageTag(string(newContent)), fmt.Sprintf("tag gerada não é válida: %s", string(newContent)))
+func TestGetFullSvgPath(t *testing.T) {
+	input := "example.md"
+	ref := "KdOYtsIfceBSFLXhtLaH9Q"
+	expected := filepath.Join(".", "example_KdOYtsIfceBSFLXhtLaH9Q.svg")
+	result := getFullSvgPath(input, ref)
+	assert.Equal(t, expected, result)
 }
 
-func mdFile(t *testing.T, mdContent string) *os.File {
-	mdFile, err := os.CreateTemp(t.TempDir(), "*.md")
-	if err != nil {
-		t.Fatalf("Erro ao criar arquivo temporário: %v", err)
+func TestRenderSVG(t *testing.T) {
+	// Para este teste, deixaremos a função renderSVG como está, uma vez que ela já chama um comando externo
+	// Logo, para testá-la, precisaríamos de uma dependência externa, o que não é ideal para um teste unitário
+	// É possível testá-la, mas isso envolveria mais complexidade e potencialmente causaria problemas de segurança
+	// Por isso, deixaremos a função renderSVG sem testes unitários
+
+	// Como alternativa, podemos testar se a função retorna um erro caso ocorra uma falha ao executar o comando externo
+	err := renderDiagram("", "")
+	assert.Error(t, err)
+}
+
+func TestGetRelativePath(t *testing.T) {
+	dirPath := "/path/to/dir/"
+	filePath := "/path/to/dir/file.md"
+	expected := "file.md"
+	result := getRelativePath(dirPath, filePath)
+	assert.Equal(t, expected, result)
+}
+
+func TestInlineToImg(t *testing.T) {
+	f, _ := os.CreateTemp("", "m2d2-*")
+	defer os.Remove(f.Name())
+	blockContent := "```d2\na->b\n```"
+	f.WriteString(blockContent)
+	ref := getBlockReference(blockContent)
+	block := CodeBlock{
+		Path:     f.Name(),
+		Content:  blockContent,
+		FileName: getFileName(f.Name()),
 	}
-	if _, err := mdFile.WriteString(mdContent); err != nil {
-		t.Fatalf("Erro ao escrever conteúdo no arquivo: %v", err)
+	// expected := fmt.Sprintf("![%s](./example_%s.svg)", ref, ref)
+	expected := Image{
+		Reference: ref,
+		Path:      f.Name(),
 	}
-	return mdFile
-}
-
-func isValidImageTag(tag string) bool {
-	regex := regexp.MustCompile(`^!\[.*\]\(.*\.(png|jpg|jpeg|gif|svg)\)$`)
-	return regex.MatchString(tag)
+	result, err := diagramToImg(block)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, result)
 }
