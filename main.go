@@ -14,15 +14,28 @@ import (
 	"strings"
 )
 
-type CodeBlock struct {
-	Path     string
-	Content  string
-	FileName string
+type DiagramCode struct {
+	Content string
+	File    *os.File
 }
 
-type Image struct {
-	Reference string
-	Path      string
+func (c DiagramCode) Reference() string {
+	hash := md5.New()
+	return base64.RawURLEncoding.EncodeToString(hash.Sum([]byte(c.Content)))
+}
+
+type InlineCode struct {
+	DiagramCode
+	Inline string
+}
+
+type DiagramImg struct {
+	DiagramCode DiagramCode
+	File        *os.File
+}
+
+func (i DiagramImg) ToMarkdown() string {
+	return fmt.Sprintf("![%s](%s)", i.File.Name(), i.File.Name())
 }
 
 func main() {
@@ -57,108 +70,79 @@ func main() {
 }
 
 func convertInline(filePath string) error {
-	markdownContent, err := os.ReadFile(filePath)
+	mdFile, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer mdFile.Close()
+
+	markdown, err := os.ReadFile(mdFile.Name())
 	if err != nil {
 		return err
 	}
 
-	blocks := getCodeBlocks(string(markdownContent), filePath)
+	blocks := getCodeBlocks(mdFile, string(markdown))
 
+	var updatedContent []byte
 	for _, block := range blocks {
-		image, err := diagramToImg(block)
+		image, err := diagramToImg(block.DiagramCode)
 		if err != nil {
 			log.Printf("Erro ao converter bloco de código: %v", err)
 			continue
 		}
-
-		newContent := fmt.Sprintf("![%s](%s)", image.Reference, image.Path)
-		markdownContent = bytes.Replace(markdownContent, []byte(block.Content), []byte(newContent), 1)
+		newContent := []byte(image.ToMarkdown())
+		oldContent := []byte(block.Inline)
+		updatedContent = bytes.Replace(markdown, oldContent, newContent, -1)
 	}
 
-	err = os.WriteFile(filePath, markdownContent, 0644)
-	if err != nil {
-		return err
+	if updatedContent != nil {
+		os.WriteFile(mdFile.Name(), updatedContent, 0755)
 	}
 
 	return nil
 }
 
-func getCodeBlocks(content string, path string) []CodeBlock {
-	d2Regex := regexp.MustCompile("(?s)```d2(.*?)```")
-
+func getCodeBlocks(file *os.File, content string) []InlineCode {
+	d2Regex := regexp.MustCompile("(?s)\n```d2(.*?)\n```\n")
 	matches := d2Regex.FindAllStringSubmatch(content, -1)
 
-	blocks := make([]CodeBlock, 0, len(matches))
+	blocks := make([]InlineCode, 0, len(matches))
 	for _, match := range matches {
-		block := CodeBlock{
-			Path:     path,
-			Content:  match[0],
-			FileName: getFileName(path),
-		}
 
-		blocks = append(blocks, block)
+		code := DiagramCode{
+			Content: strings.TrimSpace(match[1]),
+			File:    file,
+		}
+		inline := InlineCode{DiagramCode: code, Inline: match[0]}
+		blocks = append(blocks, inline)
 	}
 
 	return blocks
 }
 
-func diagramToImg(block CodeBlock) (Image, error) {
-	code := getCodeFromBlock(block.Content)
-	if code == "" {
-		return Image{}, fmt.Errorf("código D2 não encontrado no arquivo %s bloco %s", block.Path, block.Content)
+func diagramToImg(diagramCode DiagramCode) (DiagramImg, error) {
+
+	svgPath := getImgPath(diagramCode)
+	rendered, err := renderDiagram(diagramCode.Content, svgPath)
+
+	if err != nil {
+		return DiagramImg{}, err
 	}
 
-	referencia := getBlockReference(block.Content)
-
-	svgPath := getFullSvgPath(block.FileName, referencia)
-
-	if err := renderDiagram(code, svgPath); err != nil {
-		return Image{}, err
-	}
-
-	image := Image{
-		Reference: referencia,
-		Path:      svgPath,
+	image := DiagramImg{
+		DiagramCode: diagramCode,
+		File:        rendered,
 	}
 
 	return image, nil
 }
 
-func getCodeFromBlock(blockContent string) string {
-	d2Regex := regexp.MustCompile("(?s)```d2(.*?)```")
-
-	match := d2Regex.FindStringSubmatch(blockContent)
-
-	if match == nil || len(match) < 2 {
-		return ""
-	}
-
-	return match[1]
+func getImgPath(block DiagramCode) string {
+	imgFileName := filepath.Join(".diagrams", string(block.Reference())+".svg")
+	return imgFileName
 }
 
-func getFileName(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-}
-
-func getBlockReference(block string) string {
-	hash := md5.New()
-	return base64.RawURLEncoding.EncodeToString(hash.Sum([]byte(block)))
-}
-
-func getFullSvgPath(filePath string, referencia string) string {
-	svgFileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	return filepath.Join(filepath.Dir(filePath), svgFileName+"_"+referencia+".svg")
-}
-
-func getRelativePath(fromPath string, toPath string) string {
-	relativePath, err := filepath.Rel(filepath.Dir(fromPath), toPath)
-	if err != nil {
-		return ""
-	}
-	return filepath.ToSlash(relativePath)
-}
-
-func renderDiagram(code string, svgPath string) error {
+func renderDiagram(code string, svgPath string) (*os.File, error) {
 	f := bytes.NewBufferString(code)
 
 	cmd := exec.Command("d2", "-", svgPath)
@@ -168,8 +152,8 @@ func renderDiagram(code string, svgPath string) error {
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("erro ao gerar .svg do arquivo %s: %w\nOutput do comando: %s", svgPath, err, out.String())
+		return nil, fmt.Errorf("erro ao gerar diagrama %s: %w\nOutput do comando: %s", svgPath, err, out.String())
 	}
 
-	return nil
+	return os.Open(svgPath)
 }
