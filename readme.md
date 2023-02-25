@@ -35,5 +35,5 @@ b <- a: selva {
 
 ```
 
-seria compilado e substituído por uma tag do tipo: `![label](link-para-o-diagrama.svg)`
+seria compilado e substituído por uma tag do tipo: `![label](link-para-o-diagrama.svg)` desde começasse com ` ```d2`
 
