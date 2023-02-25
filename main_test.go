@@ -27,6 +27,8 @@ func TestConvertInline(t *testing.T) {
 		},
 	}
 
+	svgOutputPath = os.TempDir()
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mdFile, _ := os.CreateTemp("", "test*.md")

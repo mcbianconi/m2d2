@@ -43,18 +43,23 @@ func (i DiagramImg) ToMarkdown() string {
 	return fmt.Sprintf("\n\n![%s](%s)\n\n", i.File.Name(), i.File.Name())
 }
 
+var svgOutputPath string
+
 func main() {
 	dirPath := flag.String("dir", ".", "Caminho do diretório a ser analisado")
+	outputPath := flag.String("output-dir", ".diagrams", "Caminho do diretório que vai armazenar as imagens geradas")
 	flag.Parse()
+
+	svgOutputPath = *outputPath
 
 	stat, err := os.Stat(*dirPath)
 	if os.IsNotExist(err) || !stat.IsDir() {
 		log.Fatalf("Diretório inválido: %s não é um diretório válido.", *dirPath)
 	}
 
-	stat, err = os.Stat(".diagrams")
+	stat, err = os.Stat(svgOutputPath)
 	if stat == nil || os.IsNotExist(err) {
-		err := os.Mkdir(".diagrams", 0755)
+		err := os.Mkdir(svgOutputPath, 0755)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -151,7 +156,7 @@ func diagramToImg(diagramCode DiagramCode) (DiagramImg, error) {
 }
 
 func getImgPath(block DiagramCode) string {
-	imgFileName := filepath.Join(".diagrams", string(block.Reference())+".svg")
+	imgFileName := filepath.Join(svgOutputPath, block.Reference()+".svg")
 	return imgFileName
 }
 
