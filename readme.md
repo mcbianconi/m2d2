@@ -9,7 +9,8 @@ por sua versão renderizada.
 
 
 # Exemplo
-Em um arquivo markdown, o seguinte bloco de código, que definie um diagrama
+
+Em um arquivo markdown
 
 ```d2
 direction: left
@@ -35,5 +36,4 @@ b <- a: selva {
 
 ```
 
-seria compilado e substituído por uma tag do tipo: `![label](link-para-o-diagrama.svg)` desde começasse com ` ```d2`
-
+O bloco de código acima, que define um diagrama, seria substituído por uma tag do tipo: `![label](link-para-o-diagrama.svg)` se começasse com ` ```d2`
