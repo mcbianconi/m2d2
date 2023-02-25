@@ -1,3 +1,6 @@
+![tests](https://github.com/mcbianconi/m2d2/actions/workflows/test.yaml/badge.svg)
+
+
 # Objetivo
 :construction: WIP
 
