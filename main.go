@@ -2,16 +2,21 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/base64"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
+	"oss.terrastruct.com/d2/d2lib"
+	"oss.terrastruct.com/d2/d2renderers/d2svg"
+	"oss.terrastruct.com/d2/lib/textmeasure"
 )
 
 type DiagramCode struct {
@@ -20,8 +25,8 @@ type DiagramCode struct {
 }
 
 func (c DiagramCode) Reference() string {
-	hash := md5.New()
-	return base64.RawURLEncoding.EncodeToString(hash.Sum([]byte(c.Content)))
+	hashBytes := sha256.Sum256([]byte(c.Content))
+	return hex.EncodeToString(hashBytes[:])
 }
 
 type InlineCode struct {
@@ -35,16 +40,24 @@ type DiagramImg struct {
 }
 
 func (i DiagramImg) ToMarkdown() string {
-	return fmt.Sprintf("![%s](%s)", i.File.Name(), i.File.Name())
+	return fmt.Sprintf("\n\n![%s](%s)\n\n", i.File.Name(), i.File.Name())
 }
 
 func main() {
-	dirPath := flag.String("dir_path", ".", "Caminho do diretório a ser analisado")
+	dirPath := flag.String("dir", ".", "Caminho do diretório a ser analisado")
 	flag.Parse()
 
 	stat, err := os.Stat(*dirPath)
 	if os.IsNotExist(err) || !stat.IsDir() {
 		log.Fatalf("Diretório inválido: %s não é um diretório válido.", *dirPath)
+	}
+
+	stat, err = os.Stat(".diagrams")
+	if stat == nil || os.IsNotExist(err) {
+		err := os.Mkdir(".diagrams", 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	err = filepath.Walk(*dirPath, func(path string, info os.FileInfo, err error) error {
@@ -123,7 +136,7 @@ func getCodeBlocks(file *os.File, content string) []InlineCode {
 func diagramToImg(diagramCode DiagramCode) (DiagramImg, error) {
 
 	svgPath := getImgPath(diagramCode)
-	rendered, err := renderDiagram(diagramCode.Content, svgPath)
+	rendered, err := renderDiagram(diagramCode, svgPath)
 
 	if err != nil {
 		return DiagramImg{}, err
@@ -142,18 +155,21 @@ func getImgPath(block DiagramCode) string {
 	return imgFileName
 }
 
-func renderDiagram(code string, svgPath string) (*os.File, error) {
-	f := bytes.NewBufferString(code)
+func renderDiagram(code DiagramCode, svgPath string) (*os.File, error) {
+	ruler, _ := textmeasure.NewRuler()
+	diagram, _, _ := d2lib.Compile(context.Background(), code.Content, &d2lib.CompileOptions{
+		Layout: d2dagrelayout.DefaultLayout,
+		Ruler:  ruler,
+	})
+	out, _ := d2svg.Render(diagram, &d2svg.RenderOpts{
+		Pad: d2svg.DEFAULT_PADDING,
+	})
 
-	cmd := exec.Command("d2", "-", svgPath)
-	cmd.Stdin = f
-
-	var out bytes.Buffer
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("erro ao gerar diagrama %s: %w\nOutput do comando: %s", svgPath, err, out.String())
+	_, err := os.Create(svgPath)
+	if err != nil {
+		log.Fatalln(err)
 	}
+	_ = os.WriteFile(svgPath, out, 0600)
 
 	return os.Open(svgPath)
 }

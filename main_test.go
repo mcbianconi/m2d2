@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"testing"
@@ -39,14 +40,14 @@ func TestConvertInline(t *testing.T) {
 			if tc.expectedError {
 				assert.Equal(t, tc.content, string(fileContent))
 			} else {
-				assert.Regexp(t, regexp.MustCompile(`!\[.*\]\((.+?)\)`), string(fileContent))
+				assert.Regexp(t, regexp.MustCompile(`!\[.*\]\((.+?)\)`), string(fileContent)) // Regex pega tags no formato esperado: ![label](link)
 			}
 		})
 	}
 }
 
 func TestGetCodeBlocks(t *testing.T) {
-	mdFile, err := os.CreateTemp("", "test*.md")
+	mdFile, err := os.CreateTemp("", "test-codeblocks-*.md")
 	assert.NoError(t, err)
 	defer os.Remove(mdFile.Name())
 
@@ -91,4 +92,15 @@ func TestReference(t *testing.T) {
 
 	assert.Equal(t, diagram1.Content, diagram2.Content)
 	assert.Equal(t, diagram1.Reference(), diagram2.Reference())
+}
+
+func TestToMarkdown(t *testing.T) {
+	file, err := os.CreateTemp("", "test-markdow-*.md")
+	diagramImg := DiagramImg{
+		DiagramCode: DiagramCode{},
+		File:        file,
+	}
+
+	assert.NoError(t, err)
+	assert.Equal(t, diagramImg.ToMarkdown(), fmt.Sprintf("\n\n![%s](%s)\n\n", file.Name(), file.Name()))
 }
