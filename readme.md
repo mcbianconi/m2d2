@@ -9,7 +9,7 @@ por sua versão renderizada.
 
 
 # Exemplo
-Em um arquivo markdown, o seguinte diagrama
+Em um arquivo markdown, o seguinte bloco de código, que definie um diagrama
 
 ```d2
 direction: left
